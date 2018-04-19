@@ -18,7 +18,18 @@
 //FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS 
 //IN THE SOFTWARE.
 
-#include "stdafx.h"
+#ifndef _WIN32_WINNT		// Allow use of features specific to Windows XP or later.                   
+#define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
+#endif						
+
+//for the getaddrinfo test
+#include <WS2tcpip.h>
+#pragma comment(lib, "ws2_32")
+
+#include <windows.h>
+#include <stdio.h>
+#include <assert.h>
+
 #include "mhook-lib/mhook.h"
 
 //=========================================================================
@@ -73,7 +84,7 @@ ULONG WINAPI HookNtOpenProcess(OUT PHANDLE ProcessHandle,
 							   IN PVOID ObjectAttributes, 
 							   IN PCLIENT_ID ClientId)
 {
-	printf("***** Call to open process %d\n", ClientId->UniqueProcess);
+	printf("***** Call to open process %ld\n", (unsigned long)ClientId->UniqueProcess);
 	return TrueNtOpenProcess(ProcessHandle, AccessMask, 
 		ObjectAttributes, ClientId);
 }
@@ -103,7 +114,7 @@ int WSAAPI Hookgetaddrinfo(const char* nodename, const char* servname, const str
 // is in place
 //
 LPVOID WINAPI HookHeapAlloc(HANDLE a_Handle, DWORD a_Bla, SIZE_T a_Bla2) {
-	printf("***** Call to HeapAlloc(0x%p, %u, 0x%p)\n", a_Handle, a_Bla, a_Bla2);
+	printf("***** Call to HeapAlloc(0x%p, %u, 0x%p)\n", a_Handle, a_Bla, (PVOID)a_Bla2);
 	return TrueHeapAlloc(a_Handle, a_Bla, a_Bla2);
 }
 
@@ -122,6 +133,7 @@ ULONG WINAPI HookNtClose(HANDLE hHandle) {
 int wmain(int argc, WCHAR* argv[])
 {
 	HANDLE hProc = NULL;
+	BOOL bResult;
 
 	// Set the hook
 	if (Mhook_SetHook((PVOID*)&TrueNtOpenProcess, HookNtOpenProcess)) {
@@ -136,7 +148,8 @@ int wmain(int argc, WCHAR* argv[])
 			printf("Could not open self: %d\n", GetLastError());
 		}
 		// Remove the hook
-		Mhook_Unhook((PVOID*)&TrueNtOpenProcess);
+		bResult = Mhook_Unhook((PVOID*)&TrueNtOpenProcess);
+		assert(bResult == TRUE);
 	}
 
 	// Call OpenProces again - this time there won't be a redirection as
@@ -167,7 +180,8 @@ int wmain(int argc, WCHAR* argv[])
 		DeleteDC(hdcMem);
 		ReleaseDC(NULL, hdc);
 		// Remove the hook
-		Mhook_Unhook((PVOID*)&TrueSelectObject);
+		bResult = Mhook_Unhook((PVOID*)&TrueSelectObject);
+		assert(bResult == TRUE);
 	}
 
 	printf("Testing getaddrinfo.\n");
@@ -194,7 +208,8 @@ int wmain(int argc, WCHAR* argv[])
 		}
 		WSACleanup();
 		// Remove the hook
-		Mhook_Unhook((PVOID*)&Truegetaddrinfo);
+		bResult = Mhook_Unhook((PVOID*)&Truegetaddrinfo);
+		assert(bResult == TRUE);
 	}
 
 	printf("Testing HeapAlloc.\n");
@@ -202,7 +217,8 @@ int wmain(int argc, WCHAR* argv[])
 	{
 		free(malloc(10));
 		// Remove the hook
-		Mhook_Unhook((PVOID*)&TrueHeapAlloc);
+		bResult = Mhook_Unhook((PVOID*)&TrueHeapAlloc);
+		assert(bResult == TRUE);
 	}
 
 	printf("Testing NtClose.\n");
@@ -210,7 +226,8 @@ int wmain(int argc, WCHAR* argv[])
 	{
 		CloseHandle(NULL);
 		// Remove the hook
-		Mhook_Unhook((PVOID*)&TrueNtClose);
+		bResult = Mhook_Unhook((PVOID*)&TrueNtClose);
+		assert(bResult == TRUE);
 	}
 
 	return 0;
